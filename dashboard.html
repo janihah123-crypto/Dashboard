@@ -1,0 +1,1951 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Combined TV Dashboard</title>
+<style>
+/* Styles from index.html */
+:root{
+  --bg:#0a0a0a;
+  --card-top: rgba(255,255,255,0.02);
+  --card-bottom: rgba(0,0,0,0.16);
+  --muted: rgba(255,255,255,0.72);
+  --muted-weak: rgba(255,255,255,0.45);
+  --white:#ffffff;
+  --radius:34px;
+  --gap:28px;
+}
+
+html,body{
+  height:100%; margin:0; background:var(--bg);
+  font-family:-apple-system, "SF Pro Text","SF Pro Display", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  color:var(--white); -webkit-font-smoothing:antialiased; overflow:hidden;
+}
+
+/* Responsive stage - maintains 16:9 aspect ratio */
+.stage{ width:1920px; height:1080px; margin:0 auto; position:relative; box-sizing:border-box; transform-origin:top left; }
+
+/* Responsive grid - maintains proportions */
+.grid{ display:grid; grid-template-columns:520px 672px 672px; grid-template-rows:240px 1fr; gap:var(--gap); height:100%; box-sizing:border-box; }
+
+.card{
+  background: linear-gradient(180deg, var(--card-top), var(--card-bottom));
+  border-radius:var(--radius);
+  box-shadow: 0 12px 30px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.02);
+  padding:20px 24px; position:relative; overflow:hidden; box-sizing:border-box;
+}
+
+/* Clock, weather, holiday should clip overflow */
+.clock, .weather, .holiday { overflow:hidden; }
+.news { overflow:hidden; }
+
+/* CLOCK - left column (unchanged) */
+.clock{ grid-column:1 / 2; grid-row:1 / 2; display:flex; flex-direction:column; align-items:center; justify:center; text-align:center; }
+.clock .time { font-size:clamp(80px, 14vw, 160px); font-weight:800; line-height:0.92; letter-spacing:-2px; }
+  .clock .time { font-size:160px; font-weight:800; line-height:0.92; letter-spacing:-2px; }
+  .clock .date { font-size:30px; color:var(--muted); margin-top:8px; }
+
+/* WEATHER - column 2 (width 672) */
+.weather{ grid-column:2 / 3; grid-row:1 / 2; display:flex; flex-direction:column; justify-content:space-between; align-items:flex-start; position:relative; overflow:hidden; }
+.weather .top{ display:flex; align-items:flex-start; justify-content:space-between; width:100%; gap:24px; }
+.weather .temp-desc{ flex:1; }
+.weather .temp{ font-size:92px; font-weight:800; line-height:0.92; margin:0; }
+.weather .desc{ font-size:28px; color:var(--muted); margin-top:8px; font-weight:600; }
+.weather .iconwrap{ width:120px; height:120px; display:flex; align-items:center; justify-content:center; pointer-events:none; flex-shrink:0; }
+.weather .bottom{ display:flex; gap:32px; width:100%; font-size:19px; color:var(--muted); flex-wrap:wrap; }
+.weather .meta-item{ display:flex; flex-direction:column; gap:2px; min-width:0; }
+.weather .meta-label{ font-size:16px; color:var(--muted-weak); text-transform:uppercase; letter-spacing:0.5px; font-weight:600; }
+.weather .meta-value{ font-size:22px; color:var(--white); font-weight:700; }
+
+/* HOLIDAY / COUNTDOWN - column 3 (width 672) - centered */
+.holiday{ grid-column:3 / 4; grid-row:1 / 2; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; }
+.holiday .big{ font-size:clamp(36px, 5.2vw, 56px); font-weight:800; }
+  .holiday .big{ font-size:56px; font-weight:800; }
+  .holiday .sub{ font-size:26px; color:var(--muted); margin-top:8px; }
+
+/* CALENDAR - left bottom */
+.calendar-col{ grid-column:1 / 2; grid-row:2 / 3; display:flex; flex-direction:column; gap:1vh; padding:0; box-sizing:border-box; overflow-y:auto; max-height:100%; }
+  .calendar-col{ grid-column:1 / 2; grid-row:2 / 3; display:flex; flex-direction:column; gap:18px; padding:6px 10px 24px 10px; box-sizing:border-box; overflow-y:auto; max-height:100%; }
+  .cal-item{ background:rgba(255,255,255,0.06); border-radius:14px; padding:18px; min-height:84px; display:flex; flex-direction:column; justify-content:center; align-items:flex-start; }
+  .cal-item .time{ font-size:28px; font-weight:700; }
+  .cal-item .title{ font-size:26px; margin-top:6px; color:var(--white); }
+  .cal-item.hidden { display:none; }
+
+/* NEWS - spans cols 2+3 */
+.news{ grid-column:2 / 4; grid-row:2 / 3; display:flex; flex-direction:column; justify:flex-start; padding:44px 48px; position:relative; box-sizing:border-box; }
+.news .headline{ font-size:clamp(32px, 5.2vw, 56px); font-weight:800; margin-bottom:1.3vw; }
+  .news .headline{ font-size:56px; font-weight:800; margin-bottom:14px; }
+  .news .body{ font-size:30px; color:var(--muted); line-height:1.35; max-width:1200px; min-height:220px; }
+.news .footer{ position:absolute; left:48px; bottom:24px; font-size:22px; color:var(--muted-weak); }
+.news .dots{ position:absolute; right:38px; bottom:18px; display:flex; gap:14px; }
+.dot{ width:14px; height:14px; border-radius:50%; border:2px solid rgba(255,255,255,0.35); background:transparent; transition:transform .18s, background .18s; cursor:pointer; }
+.dot.active{ background:white; transform:scale(1.2); border-color:white; }
+
+.top-left-msg{ position:absolute; left:28px; top:12px; font-size:20px; color:var(--muted-weak); z-index:5; }
+
+/* Scrollbar styling for calendar overflow */
+.calendar-col::-webkit-scrollbar { width:6px; }
+.calendar-col::-webkit-scrollbar-track { background:rgba(255,255,255,0.05); border-radius:3px; }
+.calendar-col::-webkit-scrollbar-thumb { background:rgba(255,255,255,0.3); border-radius:3px; }
+.calendar-col::-webkit-scrollbar-thumb:hover { background:rgba(255,255,255,0.5); }
+
+/* Fullscreen mode: add margin around the stage for breathing room */
+.stage:fullscreen {
+  margin: 20px;
+}
+
+/* Styles from 2.html */
+:root{
+  --bg:#0a0a0a;
+  --card-top: rgba(255,255,255,0.02);
+  --card-bottom: rgba(0,0,0,0.16);
+  --muted: rgba(255,255,255,0.72);
+  --white:#ffffff;
+  --radius:34px;
+  --gap:28px;
+  --red:#ff453a;
+  --green:#34c759;
+}
+
+/* wecker additional root (keeps variables small) */
+:root{
+  --wecker-white:#fff;
+  --wecker-muted:rgba(255,255,255,.35);
+}
+
+/* common reset */
+html,body{
+  height:100%;
+  margin:0;
+  background:var(--bg);
+  font-family:-apple-system,"SF Pro Display","Segoe UI",Roboto,Arial,sans-serif;
+  color:var(--white);
+  overflow:hidden;
+}
+
+/* ===== STAGE ===== */
+.stage1{
+  width:1920px;
+  height:1080px;
+  position:absolute;
+  left:50%;
+  top:50%;
+  transform-origin:center center;
+}
+
+/* ===== GRID ===== */
+.grid1{
+  display:grid;
+  grid-template-columns:520px 672px 672px;
+  grid-template-rows:240px 1fr;
+  gap:var(--gap);
+  height:100%;
+}
+
+/* ===== CARD ===== */
+.card1{
+  background:linear-gradient(180deg,var(--card-top),var(--card-bottom));
+  border-radius:var(--radius);
+  box-shadow:0 12px 30px rgba(0,0,0,0.6);
+  padding:20px 24px;
+  box-sizing:border-box;
+  position:relative;
+  overflow:hidden;
+}
+
+/* ===== CLOCK ===== */
+.clock1{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+}
+
+.clock1 .time1{
+  font-size:160px;
+  font-weight:800;
+  line-height:0.92;
+}
+
+.clock1 .date1{
+  font-size:30px;
+  color:var(--muted);
+  margin-top:8px;
+}
+
+/* ===== DOOR BUTTON ===== */
+.door-btn1{
+  cursor:pointer;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  perspective:600px;
+  background:
+    radial-gradient(120% 120% at 50% 0%, rgba(255,69,58,0.35), transparent 60%),
+    rgba(255,69,58,0.18);
+}
+
+.door-btn1.open{
+  background:
+    radial-gradient(140% 140% at 50% 0%, rgba(52,199,89,0.55), transparent 60%),
+    rgba(52,199,89,0.28);
+}
+
+.door-icon1{
+  width:70px;
+  height:110px;
+  border:3px solid white;
+  border-radius:8px;
+  transform-origin:left center;
+  transition:transform .45s cubic-bezier(.4,0,.2,1);
+  position:relative;
+}
+
+.door-icon1::after{
+  content:"";
+  position:absolute;
+  right:10px;
+  top:50%;
+  width:6px;
+  height:6px;
+  background:white;
+  border-radius:50%;
+  transform:translateY(-50%);
+}
+
+.door-btn1.open .door-icon1{
+  transform:rotateY(-55deg);
+}
+
+/* ===== SMART HOME ===== */
+.smart-home1{
+  display:flex;
+  flex-direction:column;
+  gap:18px;
+  padding:6px 10px 24px 10px;
+}
+
+.device1{
+  background:rgba(255,255,255,0.06);
+  border-radius:14px;
+  padding:18px;
+  min-height:84px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  cursor:pointer;
+}
+
+.device1.active{
+  background:
+    radial-gradient(120% 120% at 50% 0%, rgba(52,199,89,0.35), transparent 60%),
+    rgba(255,255,255,0.08);
+  box-shadow:0 0 22px rgba(52,199,89,0.25);
+}
+
+.device-name1{
+  font-size:26px;
+  font-weight:600;
+}
+
+/* Switch */
+.switch1{
+  width:64px;
+  height:36px;
+  pointer-events:none;
+  position:relative;
+}
+
+.switch1 input{ display:none; }
+
+.slider1{
+  position:absolute;
+  inset:0;
+  background:rgba(255,255,255,0.25);
+  border-radius:36px;
+}
+
+.slider1::before{
+  content:"";
+  width:28px;
+  height:28px;
+  background:white;
+  position:absolute;
+  top:4px;
+  left:4px;
+  border-radius:50%;
+  transition:.25s cubic-bezier(.4,0,.2,1);
+}
+
+input:checked + .slider1{
+  background:var(--green);
+}
+
+input:checked + .slider1::before{
+  transform:translateX(28px);
+}
+
+/* Master Button */
+.master-btn1{
+  flex:1;
+  border-radius:22px;
+  background:
+    radial-gradient(120% 120% at 50% 0%, rgba(255,69,58,0.35), transparent 60%),
+    rgba(255,69,58,0.18);
+  cursor:pointer;
+}
+
+.master-btn1.activate{
+  animation:powerPulse 1.1s ease;
+}
+
+@keyframes powerPulse{
+  40%{
+    background:
+      radial-gradient(140% 140% at 50% 0%, rgba(52,199,89,0.6), transparent 60%),
+      rgba(52,199,89,0.28);
+  }
+}
+
+/* ===== CAMERA ===== */
+.camera1{
+  grid-column:2 / 4;
+  grid-row:2 / 3;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  pointer-events: auto; /* allow interactions even when view2 is hidden */
+  position:relative; /* ensure child absolute video can fill */
+  overflow:hidden;    /* clip video to the card */
+  border-radius:16px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.45), inset 0 2px 6px rgba(255,255,255,0.02);
+  background: linear-gradient(180deg, rgba(0,0,0,0.45), rgba(0,0,0,0.25));
+}
+
+/* animated diagonal overlay */
+.camera1::before{
+  content:"";
+  position:absolute;
+  inset:-40%;
+  background:
+    repeating-linear-gradient(
+      45deg,
+      rgba(255,255,255,0.035),
+      rgba(255,255,255,0.035) 2px,
+      transparent 2px,
+      transparent 8px
+    );
+  animation:cameraDrift 14s linear infinite;
+}
+
+@keyframes cameraDrift{
+  from{ transform:translateX(0) translateY(0); }
+  to{ transform:translateX(120px) translateY(-120px); }
+}
+
+.camera-content1{
+  /* make the content fill the card so absolute video covers entire area */
+  position:absolute;
+  inset:0;
+  z-index:2;
+  text-align:center;
+}
+
+/* ensure video element fills the camera tile */
+#webcamVideo{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  object-fit:cover;
+}
+
+/* camera badge: smaller, top-left, video-camera style */
+.live-badge1{
+  position:absolute;
+  top:10px;
+  left:10px;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  font-size:13px;
+  font-weight:700;
+  color:#fff;
+  background:rgba(0,0,0,0.55);
+  padding:6px 10px;
+  border-radius:12px;
+  z-index:4;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.45);
+}
+
+.live-dot1{
+  width:9px;
+  height:9px;
+  border-radius:50%;
+  background:var(--red);
+  animation:pulse 1.4s infinite;
+  box-shadow:0 0 6px rgba(255,0,0,0.6);
+}
+
+.camera-icon1{
+  font-size:72px;
+  opacity:0.9;
+}
+
+/* ESP32-CAM stream embed styles */
+.esp32-camera{ position:relative; width:100%; height:100%; display:flex; align-items:center; justify-content:center; }
+.esp32-camera img.stream{ width:100%; height:100%; object-fit:cover; border-radius:12px; display:block; }
+.esp32-camera .controls{ position:absolute; right:18px; bottom:18px; z-index:6; display:flex; gap:8px; }
+.esp32-camera .controls button{ background:rgba(0,0,0,0.45); color:white; border:0; padding:8px 10px; border-radius:8px; cursor:pointer; }
+
+/* camera error overlay */
+.cam-error-overlay{ position:absolute; left:20px; right:20px; bottom:20px; background:rgba(0,0,0,0.6); color:#fff; padding:12px 14px; border-radius:10px; display:flex; align-items:center; justify-content:space-between; z-index:8; }
+.cam-error-overlay .cam-error-msg{ font-size:14px; color:#ffdcdc; }
+.cam-error-overlay .cam-error-actions button{ background:rgba(255,255,255,0.08); border:0; color:#fff; padding:8px 10px; border-radius:8px; cursor:pointer; }
+  font-size:18px;
+  font-weight:600;
+}
+
+.live-dot1{
+  width:10px;
+  height:10px;
+  border-radius:50%;
+  background:var(--red);
+  animation:pulse 1.4s infinite;
+}
+
+@keyframes pulse{
+  0%,100%{ opacity:1; }
+  50%{ opacity:0.3; }
+}
+
+/* ===== ALARM (door) ===== */
+.alarm-overlay1{
+  position:fixed;
+  inset:0;
+  display:none;
+  align-items:center;
+  justify-content:center;
+  background:rgba(140,0,0,0.7);
+  z-index:9999;
+  animation:alarmPulse 1s infinite;
+}
+
+.alarm-overlay1.active{ display:flex; }
+
+.alarm-icon1{
+  font-size:260px;
+  color:white;
+  text-shadow:0 0 80px rgba(255,255,255,1);
+}
+
+@keyframes alarmPulse{
+  0%{ background:rgba(120,0,0,0.45); }
+  50%{ background:rgba(255,0,0,0.8); }
+  100%{ background:rgba(120,0,0,0.45); }
+}
+
+/* =========================
+   WECKER / OVERLAY STYLES
+   (merged from Wecker file)
+   ========================= */
+
+/* overlay */
+.overlay1{
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,.55);
+  backdrop-filter:blur(24px);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  opacity:0;
+  pointer-events:none;
+  transition:.35s ease;
+  z-index:2000;
+}
+.overlay1.active{ opacity:1; pointer-events:auto; }
+
+/* panel */
+.panel1{
+  width:100%;
+  max-width:900px;
+  height:100%;
+  max-height:900px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  position:relative;
+}
+
+/* status */
+.status1{
+  font-size:22px;
+  font-weight:600;
+  margin-bottom:28px;
+  color:var(--wecker-muted);
+  cursor:pointer;
+  transition:.2s;
+}
+.status1.active{ color:var(--green); }
+
+/* time picker */
+.time1{
+  display:flex;
+  gap:120px;
+  position:relative;
+}
+
+.wheel1{
+  width:160px;
+  height:460px;
+  overflow-y:auto;
+  scrollbar-width:none;
+
+/* retro overlays */
+.camera1::after{
+  /* subtle scanlines */
+  content:"";
+  position:absolute;
+  inset:0;
+  background-image: linear-gradient(rgba(0,0,0,0.04) 1px, transparent 1px);
+  background-size: 100% 4px;
+  pointer-events:none;
+  mix-blend-mode:overlay;
+  opacity:0.7;
+}
+
+.video-wrap{ position: absolute; inset:0; overflow:hidden; }
+
+.cam-overlay{ position:absolute; inset:0; pointer-events:auto; z-index:5; }
+
+/* make sure clicks go to overlay buttons, not the video */
+.video-wrap video{ pointer-events: none; display:block; width:100%; height:100%; object-fit:cover; }
+
+.rec-badge{
+  position:absolute; top:10px; right:12px; display:flex; align-items:center; gap:8px;
+  background: rgba(0,0,0,0.6); color:#fff; padding:4px 8px; border-radius:10px; font-weight:700; font-size:12px;
+  box-shadow: 0 3px 8px rgba(0,0,0,0.5);
+}
+.rec-dot{ width:10px; height:10px; border-radius:50%; background: #ff2b2b; box-shadow: 0 0 8px rgba(255,43,43,0.7); display:inline-block; }
+.rec-dot.off{ opacity:0.25; filter:grayscale(60%); }
+
+.cam-timestamp{ position:absolute; bottom:10px; right:12px; color:#ff6b6b; font-weight:700; font-family:monospace; background:rgba(0,0,0,0.5); padding:4px 8px; border-radius:8px; }
+
+/* fullscreen button */
+.fs-btn{
+  position:absolute; top:8px; right:8px; z-index:6; background:rgba(0,0,0,0.6); color:#fff; border:0; padding:6px 8px; border-radius:8px; cursor:pointer; font-size:14px; box-shadow:0 3px 8px rgba(0,0,0,0.45);
+}
+.fs-btn:active{ transform:translateY(1px); }
+.camera1.fs-active{ outline:4px solid rgba(255,255,255,0.06); }
+.rec-badge{ right:60px; }
+
+/* small film-grain */
+.camera1 .grain{
+  position:absolute; inset:0; pointer-events:none; background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="100%" height="100%" fill="rgba(0,0,0,0)"/><circle cx="10" cy="10" r="0.8" fill="rgba(0,0,0,0.02)"/></svg>'); opacity:0.25; mix-blend-mode:overlay;
+}
+  -webkit-overflow-scrolling:touch;
+}
+.wheel1::-webkit-scrollbar{display:none}
+
+.wheel1::before,
+.wheel1::after{
+  content:"";
+  height:190px;
+  display:block;
+}
+
+.item1{
+  height:92px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:72px;
+  font-weight:600;
+  color:var(--wecker-muted);
+  transition:color .2s ease, transform .2s ease;
+}
+.item1.active{
+  color:white;
+  transform:scale(1.22);
+}
+
+/* center highlight */
+.highlight1{
+  position:absolute;
+  top:50%;
+  left:-40px;
+  right:-40px;
+  height:92px;
+  transform:translateY(-50%);
+  border-radius:28px;
+  box-shadow:
+    inset 0 0 0 1px rgba(255,255,255,.1),
+    0 0 60px rgba(255,255,255,.08);
+  pointer-events:none;
+}
+
+/* days */
+.days1{
+  display:flex;
+  gap:18px;
+  margin-top:60px;
+}
+
+.day1{
+  width:60px;
+  height:60px;
+  border-radius:50%;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:rgba(255,255,255,.08);
+  font-size:20px;
+  font-weight:600;
+  cursor:pointer;
+  transition:.2s;
+}
+.day1.active{
+  background:var(--green);
+  color:black;
+}
+
+/* done button */
+.done1{
+  margin-top:70px;
+  padding:18px 48px;
+  border-radius:32px;
+  font-size:26px;
+  font-weight:600;
+  background:rgba(255,255,255,.14);
+  backdrop-filter:blur(10px);
+  cursor:pointer;
+  transition:.15s;
+}
+.done1:active{ transform:scale(.95); }
+
+/* ring overlay (alarm ringing) */
+.ring1{
+  position:fixed;
+  inset:0;
+  background:rgba(255,255,255,.85);
+  display:none;
+  align-items:center;
+  justify-content:center;
+  z-index:3000;
+  animation:ringPulse 1.2s ease-in-out infinite;
+}
+.ring1.active{ display:flex; }
+
+@keyframes ringPulse{
+  0%,100%{ opacity:.85; }
+  50%{ opacity:1; }
+}
+
+.ring-content1{
+  text-align:center;
+  color:black;
+}
+
+.ring-icon1{
+  font-size:200px;
+  margin-bottom:40px;
+}
+
+.ring-buttons1{
+  display:flex;
+  gap:40px;
+  justify-content:center;
+}
+
+.ring-btn1{
+  padding:20px 46px;
+  font-size:26px;
+  border-radius:40px;
+  cursor:pointer;
+  background:black;
+  color:white;
+}
+
+/* ===== Alarm card (free tile) styling ===== */
+.card1.alarm-card1{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  cursor:pointer;
+  user-select:none;
+  background:
+    linear-gradient(180deg,var(--card-top),rgba(255,255,255,0.02));
+  transition:transform .12s ease, box-shadow .12s ease;
+}
+.card1.alarm-card1:active{ transform:translateY(2px) }
+.alarm-button1{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:8px;
+  color:var(--muted);
+}
+.alarm-button1 .svg1{
+  width:86px;
+  height:86px;
+  display:block;
+}
+.alarm-button1 .label1{
+  font-size:20px;
+  font-weight:700;
+  color:var(--muted);
+}
+.alarm-button1 .label1.active{
+  color:var(--green);
+}
+
+/* small: ensure overlay z-indexes high enough */
+.overlay1, .ring1 { z-index: 2000; }
+.alarm-overlay1 { z-index: 2500; } /* door alarm sits above overlay but below ring */
+
+/* responsiveness: ensure stage always centered */
+@media (max-width:1200px){
+  .stage1{ transform-origin:center top; }
+}
+
+/* View switching */
+#view1, #view2 {
+  transition: opacity 0.5s ease;
+}
+#view1 {
+  opacity: 1;
+  pointer-events: auto;
+}
+#view2 {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  pointer-events: none;
+}
+</style>
+</head>
+<body>
+  <div id="view1">
+    <!-- Content from index.html -->
+    <div class="stage" role="application" aria-label="Dashboard">
+      <div class="top-left-msg" id="topMsg" aria-live="polite"></div>
+
+      <div class="grid" id="grid">
+        <!-- CLOCK -->
+        <div class="card clock" id="clockCard" role="region" aria-label="Uhr">
+          <div class="time" id="time">--:--</div>
+          <div class="date" id="date">Lädt…</div>
+        </div>
+
+        <!-- WEATHER -->
+        <div class="card weather" id="weatherCard" role="region" aria-label="Wetter">
+          <div class="top">
+            <div class="temp-desc">
+              <div class="temp" id="temp">--°C</div>
+              <div class="desc" id="wDesc">Lädt…</div>
+            </div>
+            <div class="iconwrap" id="weatherIconWrap" aria-hidden="true"></div>
+          </div>
+          <div class="bottom">
+            <div class="meta-item">
+              <div class="meta-label">Wind</div>
+              <div class="meta-value" id="wWind">—</div>
+            </div>
+            <div class="meta-item">
+              <div class="meta-label">Niederschlag</div>
+              <div class="meta-value" id="wPrecip">—</div>
+            </div>
+            <div class="meta-item">
+              <div class="meta-label">Gefühlt</div>
+              <div class="meta-value" id="wFeels">—</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- HOLIDAY / COUNTDOWN -->
+        <div class="card holiday" id="holidayCard" role="region" aria-label="Ferien">
+          <div class="big" id="holidayBig">Noch -- Tage</div>
+          <div class="sub" id="holidaySub">Winterferien · 22.12.25 - 6.01.26</div>
+        </div>
+
+        <!-- CALENDAR COLUMN -->
+        <div class="calendar-col" role="region" aria-label="Kalender" id="calendarCol">
+          <div class="cal-item" id="evt1">
+            <div class="time" id="evt1-time">--:--</div>
+            <div class="title" id="evt1-title">Lädt…</div>
+          </div>
+          <div class="cal-item" id="evt2">
+            <div class="time" id="evt2-time">--:--</div>
+            <div class="title" id="evt2-title">—</div>
+          </div>
+          <div class="cal-item" id="evt3">
+            <div class="time" id="evt3-time">--:--</div>
+            <div class="title" id="evt3-title">—</div>
+          </div>
+          <div class="cal-item" id="evt4">
+            <div class="time" id="evt4-time">--:--</div>
+            <div class="title" id="evt4-title">—</div>
+          </div>
+          <div class="cal-item" id="evt5">
+            <div class="time" id="evt5-time">--:--</div>
+            <div class="title" id="evt5-title">—</div>
+          </div>
+        </div>
+
+        <!-- NEWS -->
+        <div class="card news" id="newsCard" role="region" aria-label="Nachrichten" tabindex="0" onclick="switchToView1()">
+          <div class="headline" id="newsTitle">Lädt Nachrichten…</div>
+          <div class="body" id="newsBody">Bitte warten.</div>
+          <div class="footer" id="newsSource">Tagesschau</div>
+          <div class="dots" id="dots" role="tablist" aria-label="Nachrichten Indikator"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="view2">
+    <!-- Content from 2.html -->
+    <div class="stage1" id="stage1">
+      <div class="grid1">
+
+        <!-- CLOCK -->
+        <div class="card1 clock1">
+          <div class="time1" id="time1"></div>
+          <div class="date1" id="date1"></div>
+        </div>
+
+        <!-- FREE KACHEL -> WECKER KNOPF -->
+        <div class="card1 alarm-card1" id="alarmCard1" role="button" aria-label="Wecker öffnen" onclick="openAlarmFromTile(event)">
+          <div class="alarm-button1" id="alarmButtonInner1" >
+            <!-- nice alarm SVG icon -->
+            <svg class="svg1" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <path d="M7.88 3.39 6.46 1.97 3.34 5.09l1.42 1.42 3.12-3.12zM20.66 5.09 17.54 1.97 16.12 3.39 19.24 6.51 20.66 5.09z" fill="white" opacity="0.9"/>
+              <path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7zM12 5a7 7 0 1 0 0 14 7 7 0 0 0 0-14z" fill="white"/>
+              <path d="M12 10.5v2.5l1.8 1.05" stroke="#0a0a0a" stroke-width="0.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <div class="label1">Wecker</div>
+          </div>
+        </div>
+
+        <!-- DOOR BUTTON -->
+        <div class="card1 door-btn1" id="doorBtn1">
+          <div class="door-icon1"></div>
+        </div>
+
+        <!-- SMART HOME -->
+        <div class="smart-home1">
+          <div class="device1"><span class="device-name1">Licht</span><label class="switch1"><input type="checkbox"><span class="slider1"></span></label></div>
+          <div class="device1"><span class="device-name1">Schreibtisch</span><label class="switch1"><input type="checkbox"><span class="slider1"></span></label></div>
+          <div class="device1"><span class="device-name1">Fernseher</span><label class="switch1"><input type="checkbox"><span class="slider1"></span></label></div>
+          <div class="device1"><span class="device-name1">Drucker</span><label class="switch1"><input type="checkbox"><span class="slider1"></span></label></div>
+          <div class="master-btn1" id="masterBtn1"><input type="checkbox" id="masterInput" style="display:none;"></div>
+        </div>
+
+        <!-- CAMERA -->
+        <div class="card1 camera1">
+          <div class="live-badge1">
+            <div class="live-dot1"></div>
+            LIVE
+            <!-- camera selection is automatic; hidden UI removed -->
+          </div>
+          <div class="camera-content1">
+            <div class="video-wrap">
+              <img id="webcamVideo" data-src="http://192.168.178.50/stream" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==" alt="ESP32-CAM Live" />
+
+              <div class="cam-overlay">
+                <button id="camFsBtn" class="fs-btn" aria-label="Vollbild">⤢</button>
+                <div class="rec-badge"><span class="rec-dot" aria-hidden="true"></span> REC</div>
+                <div class="cam-timestamp" id="camTimestamp">00:00:00</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        </div>
+
+      </div>
+    </div>
+
+    <!-- AUDIO ELEMENTS -->
+    <audio id="alarmSound1" src="assets/alarm.mp3" loop></audio> <!-- original door alarm -->
+    <audio id="ringSound1" src="assets/wecker.mp3" loop></audio> <!-- wecker audio -->
+  </div>
+
+  <!-- DOOR ALARM OVERLAY (original) -->
+  <div class="alarm-overlay1" id="alarm1">
+    <div class="alarm-icon1">⚠️</div>
+  </div>
+
+  <!-- WECKER OVERLAY (from wecker code) -->
+  <div class="overlay1" id="overlay1" onclick="closeIfBackdrop(event)">
+    <div class="panel1" onclick="event.stopPropagation()">
+
+      <div class="status1" id="status1" onclick="toggleAlarmFromStatus()">
+        Kein Wecker aktiv
+      </div>
+
+      <div class="time1">
+        <div class="wheel1" id="hours1"></div>
+        <div class="wheel1" id="minutes1"></div>
+        <div class="highlight1"></div>
+      </div>
+
+      <div class="days1" id="days1">
+        <div class="day1">Mo</div><div class="day1">Di</div><div class="day1">Mi</div>
+        <div class="day1">Do</div><div class="day1">Fr</div>
+        <div class="day1">Sa</div><div class="day1">So</div>
+      </div>
+
+      <div class="done1" id="doneBtn1" onclick="saveAlarm()">Fertig</div>
+    </div>
+  </div>
+
+  <!-- RING (Wecker läutet) -->
+  <div class="ring1" id="ring1">
+    <div class="ring-content1">
+      <div class="ring-icon1">
+        <!-- keep the same alarm SVG -->
+        <svg width="200" height="200" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M12 7a5 5 0 1 1-5 5" stroke="black" stroke-width="1.8" stroke-linecap="round"/>
+          <circle cx="12" cy="12" r="7.2" stroke="black" stroke-width="1.8"/>
+          <path d="M12 12V9M12 12L14.5 13.5" stroke="black" stroke-width="1.8" stroke-linecap="round"/>
+          <path d="M6.2 3.5L4 5.8M17.8 3.5L20 5.8" stroke="black" stroke-width="1.8" stroke-linecap="round"/>
+        </svg>
+      </div>
+
+      <div class="ring-buttons1">
+        <div class="ring-btn1" onclick="snooze()">Snooze</div>
+        <div class="ring-btn1" onclick="stopAlarm()">Aus</div>
+      </div>
+    </div>
+  </div>
+
+<script>
+// Combined scripts from both files
+
+/* ------------- CONFIG ------------- */
+const CONFIG = {
+  proxyBase: window.location.origin, // expects proxy at same host: /proxy?url=...
+  icsPath: '/proxy?url=',             // we'll append encoded URL
+  familyWallUrl: 'https://api.familywall.com/ical/5gs05/5gj5k?partnerScope=Family&key=rdLkq0kqgq2vq1NMrZZGR4VBrMo=',
+  tagesschauPath: '/proxy?url=' + encodeURIComponent('https://www.tagesschau.de/xml/rss2/'),
+  newsRotateMs: 12000,
+  weatherRefreshMs: 10*60*1000,
+  calendarRefreshMs: 5*60*1000,
+  newsRefreshMs: 3*60*1000
+};
+
+/* ------------- HELPERS ------------- */
+const $ = id => document.getElementById(id);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const safe = s => (s || '').toString().trim();
+
+// View switching logic
+let inactivityTimer;
+const switchToView1 = () => {
+  // Exiting view2: stop stream and switch off LED
+  handleExitView2();
+  document.getElementById('view1').style.opacity = '1';
+  document.getElementById('view1').style.pointerEvents = 'auto';
+  document.getElementById('view2').style.opacity = '0';
+  document.getElementById('view2').style.pointerEvents = 'none';
+  resetInactivityTimer();
+};
+const switchToView2 = () => {
+  setTimeout(() => {
+    document.getElementById('view1').style.opacity = '0';
+    document.getElementById('view1').style.pointerEvents = 'auto';  // geändert von 'none' zu 'auto', um Klicks auf view1 zu erlauben
+    document.getElementById('view2').style.opacity = '1';
+    document.getElementById('view2').style.pointerEvents = 'auto';
+    // Entering view2: turn LED on first, then start stream
+    handleEnterView2();
+    resetInactivityTimer();
+  }, 10); // kleine Verzögerung, um Klick-Propagation zu vermeiden
+};
+const resetInactivityTimer = () => {
+  clearTimeout(inactivityTimer);
+  inactivityTimer = setTimeout(switchToView1, 7000); // 7 seconds
+};
+document.getElementById('view1').addEventListener('mousedown', (e) => {
+  e.preventDefault();
+  if(document.fullscreenElement) return; // don't switch views while fullscreen
+  switchToView2();
+});
+document.getElementById('view1').addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  if(document.fullscreenElement) return; // don't switch views while fullscreen
+  switchToView2();
+});
+document.getElementById('view1').addEventListener('click', (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+});
+document.getElementById('view2').addEventListener('click', resetInactivityTimer);
+document.getElementById('view2').addEventListener('touchstart', resetInactivityTimer);
+resetInactivityTimer(); // start timer initially
+
+/* ------------- CLOCK ------------- */
+function updateClock(){
+  const n = new Date();
+  $('time').textContent = n.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
+  $('date').textContent = n.toLocaleDateString('de-DE',{weekday:'long',day:'2-digit',month:'short',year:'numeric'});
+}
+updateClock();
+setInterval(updateClock,1000);
+
+/* ------------- HOLIDAYS (cycle to next) ------------- */
+const HOLIDAYS = [
+  { name: 'Winterferien', start: '2025-12-22', end: '2026-01-06' },
+  { name: 'Osterferien', start: '2026-03-30', end: '2026-04-11' },
+  { name: 'Sommerferien', start: '2026-07-27', end: '2026-09-05' },
+  { name: 'Herbstferien', start: '2026-10-12', end: '2026-10-24' },
+  { name: 'Weihnachtsferien', start: '2026-12-22', end: '2027-01-06' },
+];
+function parseLocalYMD(s){ const [y,m,d]=s.split('-').map(Number); return new Date(y,m-1,d,0,0,0); }
+function findNextHoliday(now=new Date()){
+  const list = HOLIDAYS.map(h=>({name:h.name,start:parseLocalYMD(h.start),end:parseLocalYMD(h.end)}));
+  for(let h of list){ if(h.end >= new Date(now.getFullYear(), now.getMonth(), now.getDate(),0,0,0)) return h; }
+  return list[0] || null;
+}
+function formatShort(d){ const dd=String(d.getDate()).padStart(2,'0'); const mm=String(d.getMonth()+1).padStart(2,'0'); const yy=String(d.getFullYear()).slice(-2); return `${dd}.${mm}.${yy}`; }
+function updateHolidayDisplay(){
+  const now=new Date(); const next=findNextHoliday(now);
+  if(!next){ $('holidayBig').textContent='Keine Ferien'; $('holidaySub').textContent=''; return; }
+  const todayMid = new Date(now.getFullYear(), now.getMonth(), now.getDate(),0,0,0);
+  if(todayMid >= next.start && todayMid <= next.end){
+    $('holidayBig').textContent = 'Ferien';
+    $('holidaySub').textContent = `${next.name} · ${formatShort(next.start)} - ${formatShort(next.end)}`;
+  } else {
+    const diff = Math.floor((next.start - todayMid) / (1000*60*60*24));
+    $('holidayBig').textContent = `Noch ${diff} Tage`;
+    $('holidaySub').textContent = `${next.name} · ${formatShort(next.start)} - ${formatShort(next.end)}`;
+  }
+}
+updateHolidayDisplay();
+setInterval(updateHolidayDisplay, 60*60*1000);
+
+/* ------------- SVG ICONS (Apple-like) ------------- */
+function svgSun(){ return `<svg width="96" height="96" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="4.2" stroke="white" stroke-width="1.6" fill="white"/><g stroke="white" stroke-width="1.4" stroke-linecap="round"><path d="M12 1.5v2.5"/><path d="M12 20v2.5"/><path d="M4.2 4.2l1.8 1.8"/><path d="M17.9 17.9l1.8 1.8"/><path d="M1.5 12h2.5"/><path d="M20 12h2.5"/><path d="M4.2 19.8l1.8-1.8"/><path d="M17.9 6.1l1.8-1.8"/></g></svg>`; }
+function svgCloud(){ return `<svg width="96" height="96" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M20 16.5a4.5 4.5 0 0 0 0-9 6 6 0 0 0-11.5 2A4 4 0 0 0 4 13c0 2.2 1.8 4 4 4h12z" stroke="white" stroke-width="1.4" fill="white" fill-opacity="0.02"/></svg>`; }
+function svgRain(){ return `<svg width="96" height="96" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M20 16.5a4.5 4.5 0 0 0 0-9 6 6 0 0 0-11.5 2A4 4 0 0 0 4 13c0 2.2 1.8 4 4 4h12z" stroke="white" stroke-width="1.4" fill="white" fill-opacity="0.02"/><path d="M8 19l0 2M11 19l0 2M14 19l0 2" stroke="white" stroke-width="1.6" stroke-linecap="round"/></svg>`; }
+function svgSnow(){ return `<svg width="96" height="96" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M20 16.5a4.5 4.5 0 0 0 0-9 6 6 0 0 0-11.5 2A4 4 0 0 0 4 13c0 2.2 1.8 4 4 4h12z" stroke="white" stroke-width="1.4" fill="white" fill-opacity="0.02"/><g stroke="white" stroke-width="1.4" stroke-linecap="round" transform="translate(6,14)"><path d="M3 0v4"/><path d="M0 2h6"/></g></svg>`; }
+function svgThunder(){ return `<svg width="96" height="96" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M20 16.5a4.5 4.5 0 0 0 0-9 6 6 0 0 0-11.5 2A4 4 0 0 0 4 13c0 2.2 1.8 4 4 4h12z" stroke="white" stroke-width="1.4" fill="white" fill-opacity="0.02"/><path d="M12 9l-2 4h3l-2 6" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`; }
+function chooseIconByCode(code){
+  if(code === 0) return svgSun();
+  if(code === 1 || code === 2) return svgCloud();
+  if(code === 3) return svgCloud();
+  if([45,48].includes(code)) return svgCloud();
+  if([51,53,55,61,63,65,80,81,82].includes(code)) return svgRain();
+  if([71,73,75,85,86].includes(code)) return svgSnow();
+  if([95,96,99].includes(code)) return svgThunder();
+  return svgCloud();
+}
+
+/* ------------- WEATHER (Open-Meteo) ------------- */
+async function fetchWeather(retry=0){
+  try{
+    const lat=50.314, lon=7.4719;
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&hourly=precipitation,apparent_temperature&temperature_unit=celsius&windspeed_unit=kmh&timezone=Europe%2FBerlin`;
+    const r = await fetch(url);
+    if(!r.ok) throw new Error('Wetter fetch failed');
+    const j = await r.json();
+    const cw = j.current_weather || {};
+    $('temp').textContent = (cw.temperature!=null?Math.round(cw.temperature):'--') + '°C';
+    const wc = cw.weathercode;
+    let precip='—'; let feels='—';
+    if(j.hourly && j.hourly.time && j.hourly.precipitation){
+      const nowISO = new Date().toISOString().slice(0,13);
+      const idx = j.hourly.time.findIndex(t=>t.slice(0,13)===nowISO);
+      if(idx>=0 && j.hourly.precipitation[idx]!=null) precip = Number(j.hourly.precipitation[idx]).toFixed(1);
+    }
+    if(j.hourly && j.hourly.apparent_temperature){
+      const nowISO = new Date().toISOString().slice(0,13);
+      const idx = j.hourly.time.findIndex(t=>t.slice(0,13)===nowISO);
+      if(idx>=0 && j.hourly.apparent_temperature[idx]!=null) feels = Math.round(j.hourly.apparent_temperature[idx]) + '°C';
+    }
+    $('wPrecip').textContent = precip + ' mm';
+    $('wFeels').textContent = feels;
+    $('wWind').textContent = Math.round(cw.windspeed ?? 0) + ' km/h';
+    const descMap = {0:'klar',1:'meist sonnig',2:'teils wolkig',3:'bewölkt',45:'Nebel',48:'Nebel',51:'leichter Niesel',53:'mäßiger Niesel',55:'starker Niesel',61:'leichter Regen',63:'mäßiger Regen',65:'starker Regen',71:'leichter Schnee',73:'mäßiger Schnee',75:'starker Schnee',80:'Regenschauer',81:'starke Schauer',95:'Gewitter'};
+    $('wDesc').textContent = descMap[wc] || '';
+    $('weatherIconWrap').innerHTML = chooseIconByCode(wc);
+    localStorage.setItem('dash_weather', JSON.stringify({ts:Date.now(),payload:j}));
+  }catch(e){
+    console.warn('weather err',e);
+    const cached = localStorage.getItem('dash_weather');
+    if(cached){
+      try{ const p=JSON.parse(cached).payload; $('temp').textContent = p.current_weather.temperature?Math.round(p.current_weather.temperature)+'°C':'--'; $('weatherIconWrap').innerHTML=svgCloud(); $('wPrecip').textContent='—'; $('wWind').textContent='—'; $('wDesc').textContent=''; }catch(e){}
+    } else { $('temp').textContent='--°C'; $('weatherIconWrap').innerHTML=svgCloud(); $('wPrecip').textContent='—'; $('wWind').textContent='—'; $('wDesc').textContent=''; }
+    if(retry<3){ await sleep(1000*Math.pow(2,retry)); return fetchWeather(retry+1); }
+  }
+}
+fetchWeather();
+setInterval(()=>fetchWeather().catch(()=>{}), CONFIG.weatherRefreshMs);
+
+/* ------------- Calendar via proxy (robust) ------------- */
+function parseICalDate(s){
+  if(!s) return null; s=s.trim();
+    if(/^\d{8}T\d{6}Z$/.test(s)){
+      const y=s.slice(0,4),mo=s.slice(4,6),d=s.slice(6,8),hh=s.slice(9,11),mm=s.slice(11,13),ss=s.slice(13,15);
+      return new Date(`${y}-${mo}-${d}T${hh}:${mm}:${ss}Z`);
+    }
+  if(/^\d{8}T\d{6}$/.test(s)){ const y=s.slice(0,4),mo=s.slice(4,6),d=s.slice(6,8),hh=s.slice(9,11),mm=s.slice(11,13),ss=s.slice(13,15); return new Date(`${y}-${mo}-${d}T${hh}:${mm}:${ss}`); }
+  if(/^\d{8}$/.test(s)){ const y=s.slice(0,4),mo=s.slice(4,6),d=s.slice(6,8); return new Date(`${y}-${mo}-${d}T00:00:00`); }
+  const dd=new Date(s); return isNaN(dd)?null:dd;
+}
+
+async function fetchICalProxy(retry=0){
+  try{
+    const proxyUrl = `/proxy?url=${encodeURIComponent(CONFIG.familyWallUrl)}`;
+    const r = await fetch(proxyUrl);
+    if(!r.ok) throw new Error('iCal proxy fetch failed ' + r.status);
+    const txt = await r.text();
+    const unfolded = txt.replace(/(\r\n|\n)[ \t]/g,'');
+    const blocks = unfolded.split(/BEGIN:VEVENT/).slice(1);
+    const events = [];
+    const now=new Date();
+    const sday=new Date(now.getFullYear(), now.getMonth(), now.getDate(),0,0,0);
+    const eday=new Date(now.getFullYear(), now.getMonth(), now.getDate(),23,59,59);
+    const ymdLocal = d => `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+    for(const b of blocks){
+      const block=b.split('END:VEVENT')[0];
+      const summary=(block.match(/SUMMARY(?:;[^:]+)?:([^\r\n]+)/) || [null,''])[1] || '';
+      const dtstartRaw=(block.match(/DTSTART(?:;[^:]+)?:([^\r\n]+)/) || [])[1];
+      const dtendRaw=(block.match(/DTEND(?:;[^:]+)?:([^\r\n]+)/) || [])[1];
+      const s=parseICalDate(dtstartRaw);
+      const e=parseICalDate(dtendRaw) || s;
+      const rruleRaw = (block.match(/RRULE:([^\r\n]+)/)||[])[1] || null;
+      const exdates = Array.from(block.matchAll(/EXDATE(?:;[^:]+)?:([^\r\n]+)/g)).map(m=>m[1]).filter(Boolean).flatMap(x=>x.split(','));
+      const exdatesParsed = exdates.map(x=>parseICalDate(x)).filter(Boolean);
+      if(rruleRaw && s){
+        const parts = Object.fromEntries(rruleRaw.split(';').map(p=>p.split('=')));
+        const freq = (parts.FREQ||'').toUpperCase();
+        const until = parts.UNTIL ? parseICalDate(parts.UNTIL) : null;
+        const byday = parts.BYDAY ? parts.BYDAY.split(',') : null;
+        const interval = parts.INTERVAL ? parseInt(parts.INTERVAL,10) : 1;
+        const dtStartDate = new Date(s.getFullYear(), s.getMonth(), s.getDate());
+        const targetDate = new Date(sday.getFullYear(), sday.getMonth(), sday.getDate());
+        let occursToday = false;
+        if(!until || targetDate <= until){
+          if(freq==='WEEKLY' && targetDate >= dtStartDate){
+            const weekdayMap=['SU','MO','TU','WE','TH','FR','SA'];
+            const todayBy = weekdayMap[targetDate.getDay()];
+            occursToday = byday ? byday.includes(todayBy) : s.getDay() === targetDate.getDay();
+            if(occursToday && exdatesParsed.length){
+              const exMatch = exdatesParsed.some(ed=> ymdLocal(ed) === ymdLocal(targetDate) );
+              if(exMatch) occursToday = false;
+            }
+          } else if(freq==='DAILY' && targetDate >= dtStartDate){
+            const diffDays = Math.floor((targetDate - dtStartDate)/(1000*60*60*24));
+            occursToday = (diffDays % interval)===0;
+            if(occursToday && exdatesParsed.length){
+              const exMatch = exdatesParsed.some(ed=> ymdLocal(ed) === ymdLocal(targetDate) );
+              if(exMatch) occursToday = false;
+            }
+          }
+        }
+        if(occursToday){
+          const occStart = new Date(sday.getFullYear(), sday.getMonth(), sday.getDate(), s.getHours(), s.getMinutes(), s.getSeconds());
+          const occEnd = e ? new Date(sday.getFullYear(), sday.getMonth(), sday.getDate(), e.getHours(), e.getMinutes(), e.getSeconds()) : occStart;
+          events.push({summary:summary.replace(/\\,/g,','), start:occStart, end:occEnd});
+        }
+      } else if(s){
+        events.push({summary:summary.replace(/\\,/g,','), start:s, end:e});
+      }
+    }
+    // include events that overlap today's range (start before end of day and end after start of day)
+    const todays = events.filter(ev=>{
+      const evEnd = ev.end || ev.start;
+      // iCalendar DTEND is exclusive — treat events that end exactly at sday (00:00) as not occurring on sday
+      return ev.start <= eday && evEnd > sday;
+    }).sort((a,b)=>{
+      // sort by the display start (if event started earlier, treat as start of day)
+      const aStart = a.start < sday ? sday : a.start;
+      const bStart = b.start < sday ? sday : b.start;
+      return aStart - bStart;
+    });
+    $('topMsg').textContent = `Kalender: ${events.length} / ${todays.length}`;
+    setTimeout(()=>{ $('topMsg').textContent=''; }, 4000);
+    if(todays.length===0){
+      $('evt1-time').textContent=''; $('evt1-title').textContent='Keine Termine';
+      for(let i=2;i<=5;i++){ const item=$('evt'+i); if(item) item.classList.add('hidden'); }
+    } else {
+      for(let i=0;i<Math.min(todays.length, 5);i++){
+        const ev=todays[i];
+        const item=$('evt'+(i+1));
+        if(item) item.classList.remove('hidden');
+        const fmt=d=>d.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
+        // If event started before today, show start as beginning of day; if ends after today, cap to end of day
+        const displayStart = ev.start < sday ? sday : ev.start;
+        const displayEnd = ev.end ? (ev.end > eday ? eday : ev.end) : null;
+        $('evt'+(i+1)+'-time').textContent = fmt(displayStart) + (displayEnd ? ' - ' + fmt(displayEnd) : '');
+        $('evt'+(i+1)+'-title').textContent=ev.summary;
+      }
+      for(let i=todays.length;i<5;i++){
+        const item=$('evt'+(i+1));
+        if(item) item.classList.add('hidden');
+      }
+    }
+    localStorage.setItem('dash_ical', JSON.stringify({ts:Date.now(),data:todays}));
+  }catch(e){
+    console.warn('iCal err',e);
+    const cached = localStorage.getItem('dash_ical');
+    if(cached){
+      try{
+        const parsed = JSON.parse(cached).data || [];
+        for(let i=0;i<5;i++){
+          const ev = parsed[i];
+          if(ev){
+            const start = new Date(ev.start);
+            $('evt'+(i+1)+'-time').textContent = start.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
+            $('evt'+(i+1)+'-title').textContent = ev.summary || 'Termin';
+          } else {
+            $('evt'+(i+1)+'-time').textContent='';
+            $('evt'+(i+1)+'-title').textContent='';
+          }
+        }
+      }catch(e){}
+    } else {
+      $('evt1-time').textContent=''; $('evt1-title').textContent='Kalender nicht verfügbar'; 
+      for(let i=2;i<=5;i++){ $('evt'+i+'-time').textContent=''; $('evt'+i+'-title').textContent=''; }
+    }
+    if(retry<3){ await sleep(800*Math.pow(2,retry)); return fetchICalProxy(retry+1); }
+  }
+}
+fetchICalProxy();
+setInterval(()=>fetchICalProxy().catch(()=>{}), CONFIG.calendarRefreshMs);
+
+/* ------------- NEWS via proxy ------------- */
+let NEWS = {items:[], idx:0, timer:null, paused:false};
+function buildDots(n){ const d=$('dots'); d.innerHTML=''; for(let i=0;i<n;i++){ const b=document.createElement('button'); b.className='dot'; b.setAttribute('data-i',i); b.addEventListener('click',()=>showNews(i)); d.appendChild(b); } }
+function setActiveDot(i){ const nodes=$('dots').children; for(let j=0;j<nodes.length;j++) nodes[j].classList.toggle('active', j===i); }
+function showNews(i){ if(!NEWS.items.length) return; NEWS.idx=((i%NEWS.items.length)+NEWS.items.length)%NEWS.items.length; const it=NEWS.items[NEWS.idx]; $('newsTitle').textContent=it.title; $('newsBody').textContent=it.description||''; $('newsSource').textContent=it.source||'Tagesschau'; setActiveDot(NEWS.idx); }
+function startNewsRotation(){ if(NEWS.timer) clearInterval(NEWS.timer); NEWS.timer = setInterval(()=>{ if(!NEWS.paused) showNews(NEWS.idx+1); }, CONFIG.newsRotateMs); }
+$('newsCard').addEventListener('mouseenter', ()=>NEWS.paused=true); $('newsCard').addEventListener('mouseleave', ()=>NEWS.paused=false);
+
+// fetch Tagesschau via proxy to avoid CORS
+async function fetchNewsProxy(retry=0){
+  try{
+    const r = await fetch(CONFIG.tagesschauPath);
+    if(!r.ok) throw new Error('news proxy failed '+r.status);
+    const txt = await r.text();
+    const xml = (new DOMParser()).parseFromString(txt,'application/xml');
+    const items = Array.from(xml.querySelectorAll('item')).map(it=>{
+      const title = safe(it.querySelector('title')?.textContent);
+      let desc = safe(it.querySelector('description')?.textContent || it.querySelector('content\\:encoded')?.textContent || '');
+      desc = desc.replace(/(<([^>]+)>)/gi,'').trim();
+      return {title, description:desc, source:'Tagesschau'};
+    }).filter(x=>x.title);
+    if(items.length===0) throw new Error('no items');
+    NEWS.items = items.slice(0,8);
+    buildDots(NEWS.items.length);
+    showNews(0);
+    startNewsRotation();
+    localStorage.setItem('dash_news', JSON.stringify({ts:Date.now(),data:NEWS.items}));
+  }catch(e){
+    console.warn('news err',e);
+    const cached = localStorage.getItem('dash_news');
+    if(cached){
+      try{ NEWS.items = JSON.parse(cached).data || []; buildDots(NEWS.items.length); showNews(0); startNewsRotation(); }catch(e){}
+    } else { $('newsTitle').textContent='Nachrichten nicht verfügbar'; $('newsBody').textContent=''; $('newsSource').textContent=''; }
+    if(retry<3){ await sleep(900*Math.pow(2,retry)); return fetchNewsProxy(retry+1); }
+  }
+}
+fetchNewsProxy();
+setInterval(()=>fetchNewsProxy().catch(()=>{}), CONFIG.newsRefreshMs);
+
+// Scale the fixed 1920x1080 stage to fit the current viewport while preserving layout
+function fitStage(){
+  try{
+    const viewport = {w: window.innerWidth, h: window.innerHeight};
+    const stage = {w: 1920, h: 1080};
+    // contain: scale so the entire stage is visible, preserve aspect ratio
+    const rawScale = Math.min(viewport.w / stage.w, viewport.h / stage.h) || 1;
+    const minScale = 0.45;
+    const maxScale = 1.1;
+    const scale = Math.max(minScale, Math.min(maxScale, rawScale));
+    const stageEl = document.querySelector('.stage');
+    if(stageEl){
+      // ensure stage has explicit pixel size for predictable scaling
+      stageEl.style.width = stage.w + 'px';
+      stageEl.style.height = stage.h + 'px';
+      // center and scale so nothing is cut off
+      stageEl.style.position = 'absolute';
+      stageEl.style.left = '50%';
+      stageEl.style.top = '50%';
+      stageEl.style.transformOrigin = 'center center';
+      stageEl.style.transform = `translate(-50%, -50%) scale(${scale})`;
+      // body is the viewport container
+      document.body.style.width = '100vw';
+      document.body.style.height = '100vh';
+      document.body.style.overflow = 'hidden';
+      document.body.style.margin = '0';
+      document.body.style.padding = '0';
+      stageEl.style.boxSizing = 'border-box';
+    }
+  }catch(e){console.warn('fitStage err',e)}
+}
+window.addEventListener('resize', fitStage);
+window.addEventListener('load', fitStage);
+setTimeout(fitStage,50);
+
+/* ------------- Fullscreen Mode ------------- */
+function toggleFullscreen(){
+  try{
+    if(!document.fullscreenElement){
+      document.documentElement.requestFullscreen().catch(err=>{
+        console.warn('fullscreen request denied:', err);
+      });
+    } else {
+      document.exitFullscreen();
+    }
+  }catch(e){
+    console.warn('fullscreen not available:', e);
+  }
+}
+// F key to toggle fullscreen
+document.addEventListener('keydown', (e)=>{
+  if(e.key === 'f' || e.key === 'F') toggleFullscreen();
+});
+// Double-click to toggle fullscreen
+document.addEventListener('dblclick', ()=>{
+  toggleFullscreen();
+});
+
+/* ------------- Stability: reload / wakeLock ------------- */
+setTimeout(()=>{ location.reload(); }, 6*60*60*1000); // 6 hours
+
+if('wakeLock' in navigator){
+  (async ()=>{
+    try{
+      const lock = await navigator.wakeLock.request('screen');
+      lock.addEventListener('release', ()=>console.info('wakeLock released'));
+      document.addEventListener('visibilitychange', async ()=>{
+        if(document.visibilityState==='visible'){
+          try{ await navigator.wakeLock.request('screen'); }catch(e){}
+        }
+      });
+    }catch(e){ console.warn('wakeLock not available', e); }
+  })();
+}
+
+// Scripts from 2.html
+/* =========================
+   CLOCK
+   ========================= */
+function updateClock1(){
+  const n=new Date();
+  document.getElementById('time1').textContent = n.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
+  document.getElementById('date1').textContent = n.toLocaleDateString('de-DE',{weekday:'long',day:'2-digit',month:'short',year:'numeric'});
+}
+setInterval(updateClock1,1000); updateClock1();
+
+/* =========================
+   SCALE (fit stage)
+   ========================= */
+function fitStage1(){
+  const stage1 = document.getElementById('stage1');
+  const s=Math.min(innerWidth/1920,innerHeight/1080);
+  stage1.style.transform=`translate(-50%,-50%) scale(${s})`;
+}
+addEventListener('resize',fitStage1); fitStage1();
+
+/* =========================
+   DEVICES (toggle)
+   ========================= */
+document.querySelectorAll('.device1').forEach(d=>{
+  d.onclick=()=>{
+    const cb=d.querySelector('input');
+    cb.checked=!cb.checked;
+    d.classList.toggle('active',cb.checked);
+  };
+});
+
+/* =========================
+   MASTER BUTTON (toggle own device)
+   ========================= */
+const masterBtn1 = document.getElementById('masterBtn1');
+masterBtn1.onclick = () => {
+  const cb = document.getElementById('masterInput');
+  cb.checked = !cb.checked;
+  // Visual animation
+  masterBtn1.classList.remove('activate');
+  void masterBtn1.offsetWidth;
+  masterBtn1.classList.add('activate');
+};
+
+/* =========================
+   AUDIO UNLOCK (try to unlock both audios)
+   ========================= */
+let unlocked=false;
+addEventListener('click',()=>{ // first user click unlocks audio playback
+  if(unlocked) return;
+  unlocked=true;
+
+  const a1 = document.getElementById('alarmSound1');
+  const a2 = document.getElementById('ringSound1');
+
+  // try play/pause quickly to unlock
+  if(a1){
+    a1.play().then(()=>{ a1.pause(); a1.currentTime=0; }).catch(()=>{});
+  }
+  if(a2){
+    a2.play().then(()=>{ a2.pause(); a2.currentTime=0; }).catch(()=>{});
+  }
+});
+
+/* =========================
+   DOOR + ALARM (original)
+   ========================= */
+let doorOpen=false, timer=null;
+const doorBtn1 = document.getElementById('doorBtn1');
+
+doorBtn1.onclick=()=>{
+  doorOpen=!doorOpen;
+  doorBtn1.classList.toggle('open',doorOpen);
+
+  if(doorOpen){
+    timer=setTimeout(()=>{
+      // show door alarm overlay (id "alarm")
+      document.getElementById('alarm1').classList.add('active');
+      document.getElementById('alarmSound1').play().catch(()=>{});
+    },10000);
+  }else{
+    clearTimeout(timer);
+    document.getElementById('alarm1').classList.remove('active');
+    const a = document.getElementById('alarmSound1');
+    if(a){ a.pause(); a.currentTime=0; }
+  }
+};
+
+document.getElementById('alarm1').onclick=()=>{
+  document.getElementById('alarm1').classList.remove('active');
+  const a = document.getElementById('alarmSound1');
+  if(a){ a.pause(); a.currentTime=0; }
+};
+
+/* =========================
+   WECKER / OVERLAY LOGIC
+   (merged from provided wecker code)
+   ========================= */
+
+const overlay1=document.getElementById('overlay1');
+const status1=document.getElementById('status1');
+const dayEls=[...document.querySelectorAll('.day1')];
+const hours1=document.getElementById('hours1');
+const minutes1=document.getElementById('minutes1');
+
+let alarmActive=false;
+let alarmTime='--:--';
+let alarmDate=null;
+let userDayOverride=false;
+
+/* OPEN / RESET (exposed) */
+function openAlarm(){
+  resetAlarmUI();
+  overlay1.classList.add('active');
+}
+
+/* helper used by tile */
+function openAlarmFromTile(e){
+  // small visual feedback
+  const lbl = document.querySelector('#alarmButtonInner1 .label1');
+  if(lbl){ lbl.classList.add('active'); setTimeout(()=>lbl.classList.remove('active'),260); }
+  openAlarm();
+}
+
+/* reset to default state */
+function resetAlarmUI(){
+  userDayOverride=false;
+  dayEls.forEach(d=>d.classList.remove('active'));
+
+  setTimeout(()=>{
+    if(alarmActive && alarmTime !== '--:--'){
+      const [h, m] = alarmTime.split(':').map(Number);
+      setWheel(hours1, h);
+      setWheel(minutes1, m);
+      // setze den Tag basierend auf alarmDate
+      if(alarmDate){
+        const idx = (alarmDate.getDay() + 6) % 7; // Mo=0, Di=1, etc.
+        dayEls[idx].classList.add('active');
+      }
+    } else {
+      const now=new Date();
+      setWheel(hours1, now.getHours());
+      setWheel(minutes1, now.getMinutes());
+      setTimeout(autoSelectDay,50);
+    }
+  },10);
+}
+
+function setWheel(wheel,value){
+  const items=[...wheel.children];
+  items.forEach(i=>i.classList.remove('active'));
+  const target=items[value];
+  if(target){
+    target.classList.add('active');
+    target.scrollIntoView({block:'center',behavior:'instant'});
+  }
+}
+
+/* close */
+function closeAlarm(){
+  overlay1.classList.remove('active');
+}
+function closeIfBackdrop(e){
+  if(e.target===overlay1) closeAlarm();
+}
+
+/* build wheels */
+function fill(el,max){
+  for(let i=0;i<max;i++){
+    const d=document.createElement('div');
+    d.className='item1';
+    d.textContent=String(i).padStart(2,'0');
+    el.appendChild(d);
+  }
+}
+fill(hours1,24);
+fill(minutes1,60);
+
+function attach(w){
+  const items=[...w.children];
+  let snap=null;
+
+  function update(){
+    const r=w.getBoundingClientRect();
+    const c=r.top+r.height/2;
+    items.forEach(i=>{
+      const ir=i.getBoundingClientRect();
+      const d=Math.abs((ir.top+ir.height/2)-c);
+      i.classList.toggle('active',d<46);
+    });
+    if(!userDayOverride) autoSelectDay();
+  }
+
+  w.addEventListener('scroll',()=>{
+    update();
+    clearTimeout(snap);
+    snap=setTimeout(()=>{
+      const r=w.getBoundingClientRect();
+      const c=r.top+r.height/2;
+      let best=null,dist=9999;
+      items.forEach(i=>{
+        const ir=i.getBoundingClientRect();
+        const d=Math.abs((ir.top+ir.height/2)-c);
+        if(d<dist){dist=d;best=i;}
+      });
+      best?.scrollIntoView({block:'center',behavior:'smooth'});
+    },120);
+  },{passive:true});
+}
+attach(hours1);
+attach(minutes1);
+
+/* days manual override */
+dayEls.forEach((d,i)=>{
+  d.onclick=()=>{
+    userDayOverride=true;
+    dayEls.forEach(x=>x.classList.remove('active'));
+    d.classList.add('active');
+  };
+});
+
+/* auto day logic */
+function autoSelectDay(){
+  const h=document.querySelector('#hours1 .item1.active')?.textContent;
+  const m=document.querySelector('#minutes1 .item1.active')?.textContent;
+  if(!h||!m) return;
+
+  const now=new Date();
+  const alarm=new Date();
+  alarm.setHours(+h,+m,0,0);
+  if(alarm<=now) alarm.setDate(alarm.getDate()+1);
+
+  alarmDate=alarm;
+
+  const idx=(alarm.getDay()+6)%7;
+  dayEls.forEach((d,i)=>d.classList.toggle('active',i===idx));
+}
+
+/* save */
+function saveAlarm(){
+  const h=document.querySelector('#hours1 .item1.active')?.textContent || '00';
+  const m=document.querySelector('#minutes1 .item1.active')?.textContent || '00';
+  alarmTime=`${h}:${m}`;
+  alarmActive=true;
+
+  status1.textContent=`Wecker aktiv · ${alarmTime}`;
+  status1.classList.add('active');
+
+  closeAlarm();
+}
+
+/* toggle active alarm by clicking status */
+function toggleAlarm(){
+  if(!alarmActive) return;
+  alarmActive=false;
+  status1.textContent='Kein Wecker aktiv';
+  status1.classList.remove('active');
+}
+
+/* wrapper to avoid name conflict with door alarm */
+function toggleAlarmFromStatus(){ toggleAlarm(); }
+
+/* =========================
+   RING TRIGGER (checks time)
+   ========================= */
+const ring1=document.getElementById('ring1');
+const ringSound1=document.getElementById('ringSound1');
+
+setInterval(()=>{
+  if(!alarmActive||!alarmDate) return;
+  const now=new Date();
+  if(now>=alarmDate){
+    ring1.classList.add('active');
+    ringSound1.play().catch(()=>{});
+    alarmActive=false;
+  }
+},1000);
+
+/* stop ring */
+function stopAlarm(){
+  ring1.classList.remove('active');
+  if(ringSound1){ ringSound1.pause(); ringSound1.currentTime=0; }
+}
+
+/* snooze */
+function snooze(){
+  stopAlarm();
+  alarmDate=new Date(Date.now()+9*60*1000);
+  alarmActive=true;
+}
+
+/* Expose openAlarm globally (already defined) */
+window.openAlarm = openAlarm;
+
+/* (optional) expose stopAlarm/snooze to global — already functions */
+
+/* ensure clicking 'status' toggles the alarm if active */
+document.getElementById('status1').onclick = toggleAlarmFromStatus;
+
+/* done: all wecker functions included */
+
+/* =========================
+   WEBCAM LIVE VIDEO
+   ========================= */
+async function startWebcam() {
+  // If the page embeds an external stream via an <img> (ESP32-CAM), don't try to call getUserMedia
+  const el = document.getElementById('webcamVideo');
+  if (!el) return;
+  if (el.tagName && el.tagName.toLowerCase() === 'img' && el.src && (el.src.startsWith('http:') || el.src.startsWith('https:'))) {
+    // External MJPEG stream: use image element. Add onerror handler and retry control.
+    el.addEventListener('error', ()=>{
+      showCamError('Stream kann nicht geladen werden. Prüfe IP/Port oder Kamera.');
+    });
+    // remove any placeholder icon previously rendered
+    const icon = document.querySelector('.camera-icon1');
+    if(icon) icon.style.display = 'none';
+    return;
+  }
+
+  try {
+    // Use the local selected camera (if provided) or the default
+    const deviceId = window.currentDeviceId;
+    const constraints = deviceId ? { video: { deviceId: { exact: deviceId } } } : { video: true };
+    const stream = await navigator.mediaDevices.getUserMedia(constraints);
+    if (window._currentStream) {
+      try { window._currentStream.getTracks().forEach(t => t.stop()); } catch (e) {}
+    }
+    window._currentStream = stream;
+    const video = document.getElementById('webcamVideo');
+    if (!video) return;
+    // if it's an <img>, don't attach stream
+    if (video.tagName && video.tagName.toLowerCase() === 'img') return;
+    video.srcObject = stream;
+    video.style.width = '100%';
+    video.style.height = '100%';
+    video.style.objectFit = 'cover';
+    video.style.position = 'absolute';
+    video.style.top = '0';
+    video.style.left = '0';
+  } catch (err) {
+    console.error('Error accessing webcam:', err);
+    document.querySelector('.camera-content1').innerHTML = '<div class="camera-icon1">📹</div>';
+  }
+}
+
+function showCamError(msg){
+  // create or update an overlay message with reload button
+  let overlay = document.querySelector('.cam-error-overlay');
+  if(!overlay){
+    overlay = document.createElement('div');
+    overlay.className = 'cam-error-overlay';
+    overlay.innerHTML = `<div class="cam-error-msg"></div><div class="cam-error-actions"><button id="camReloadBtn">Neu laden</button></div>`;
+    document.querySelector('.camera-content1').appendChild(overlay);
+    document.getElementById('camReloadBtn').addEventListener('click', ()=>{
+      const img = document.getElementById('webcamVideo');
+      if(!img) return;
+      // cache-busting
+      const u = new URL(img.src, window.location.href);
+      u.searchParams.set('_t', Date.now());
+      img.src = u.toString();
+      overlay.remove();
+    });
+  }
+  overlay.querySelector('.cam-error-msg').textContent = msg;
+}
+
+async function populateCameraList() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
+  let devices = await navigator.mediaDevices.enumerateDevices();
+  let videoDevices = devices.filter(d => d.kind === 'videoinput');
+  // If labels are empty, request permission once to get labels
+  const needLabels = videoDevices.every(d => !d.label);
+  if (needLabels) {
+    try {
+      const tmpStream = await navigator.mediaDevices.getUserMedia({ video: true });
+      tmpStream.getTracks().forEach(t => t.stop());
+      devices = await navigator.mediaDevices.enumerateDevices();
+      videoDevices = devices.filter(d => d.kind === 'videoinput');
+    } catch (e) {
+      // user denied or no camera
+    }
+  }
+
+  // Auto-select camera by name proximity to "iCatchtek"
+  const target = 'iCatchtek';
+  function levenshtein(a, b) {
+    if (!a) return b.length;
+    if (!b) return a.length;
+    const matrix = Array.from({length: a.length+1}, () => Array(b.length+1).fill(0));
+    for (let i=0;i<=a.length;i++) matrix[i][0]=i;
+    for (let j=0;j<=b.length;j++) matrix[0][j]=j;
+    for (let i=1;i<=a.length;i++){
+      for (let j=1;j<=b.length;j++){
+        const cost = a[i-1].toLowerCase()===b[j-1].toLowerCase()?0:1;
+        matrix[i][j]=Math.min(matrix[i-1][j]+1, matrix[i][j-1]+1, matrix[i-1][j-1]+cost);
+      }
+    }
+    return matrix[a.length][b.length];
+  }
+
+  if (videoDevices.length > 0) {
+    // try exact/partial include match first
+    const includeMatch = videoDevices.find(d => d.label && d.label.toLowerCase().includes(target.toLowerCase()));
+    if (window.currentDeviceId) {
+      // keep existing
+    } else if (includeMatch) {
+      window.currentDeviceId = includeMatch.deviceId;
+    } else {
+      // fallback: pick device with smallest levenshtein distance to target (by label)
+      let best = null;
+      let bestScore = Infinity;
+      for (const d of videoDevices) {
+        const label = d.label || '';
+        const score = levenshtein(label.toLowerCase(), target.toLowerCase());
+        if (score < bestScore) { bestScore = score; best = d; }
+      }
+      if (best) {
+        window.currentDeviceId = best.deviceId;
+      } else {
+        // last resort: first device
+        window.currentDeviceId = videoDevices[0].deviceId;
+      }
+    }
+  }
+}
+
+// Start webcam when page loads (requires user permission)
+window.addEventListener('load', async () => {
+  await populateCameraList();
+  // If the page uses an external image stream (ESP32-CAM) we should not call getUserMedia.
+  const el = document.getElementById('webcamVideo');
+  if (el && el.tagName && el.tagName.toLowerCase() === 'video') {
+    await startWebcam();
+  } else {
+    // If it's an <img>, add an error handler to show friendly message
+    if (el && el.tagName && el.tagName.toLowerCase() === 'img') {
+      el.addEventListener('error', ()=> showCamError('Stream kann nicht geladen werden. Prüfe die Kamera-IP/Port.'));
+    }
+  }
+  // start overlays
+  startCamOverlay();
+});
+
+/* camera overlays: timestamp + rec flashing */
+function pad(n){return String(n).padStart(2,'0');}
+function startCamOverlay(){
+  const ts = document.getElementById('camTimestamp');
+  const recDot = document.querySelector('.rec-dot');
+  if(!ts || !recDot) return;
+  setInterval(()=>{
+    const d=new Date();
+    ts.textContent = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  },1000);
+  // flash REC dot
+  setInterval(()=>{ recDot.classList.toggle('off'); }, 600);
+}
+
+/* =========================
+   CAMERA FULLSCREEN (long-press)
+   ========================= */
+let cameraLongPressTimer=null;
+const longPressMs = 600;
+const cameraCard = document.querySelector('.camera1');
+
+function enterCameraFullscreen(){
+  const el = cameraCard.querySelector('video') || cameraCard;
+  if(!el) return;
+  if(el.requestFullscreen){
+    el.requestFullscreen().catch(()=>{});
+  }
+  // pause inactivity timer while fullscreen
+  clearTimeout(inactivityTimer);
+}
+
+function exitCameraFullscreen(){
+  if(document.exitFullscreen) document.exitFullscreen().catch(()=>{});
+}
+
+// long-press handlers
+if(cameraCard){
+  cameraCard.addEventListener('mousedown', e=>{ e.stopPropagation(); cameraLongPressTimer = setTimeout(enterCameraFullscreen, longPressMs); });
+  cameraCard.addEventListener('mouseup', e=>{ clearTimeout(cameraLongPressTimer); });
+  cameraCard.addEventListener('mouseleave', e=>{ clearTimeout(cameraLongPressTimer); });
+  cameraCard.addEventListener('touchstart', e=>{ e.stopPropagation(); cameraLongPressTimer = setTimeout(enterCameraFullscreen, longPressMs); }, {passive:true});
+  cameraCard.addEventListener('touchend', e=>{ clearTimeout(cameraLongPressTimer); });
+}
+
+// fullscreen button handler (click)
+const camFsBtn = document.getElementById('camFsBtn');
+if(camFsBtn && cameraCard){
+  camFsBtn.addEventListener('click', (e)=>{
+    e.stopPropagation();
+    const el = cameraCard.querySelector('video') || cameraCard;
+    if(document.fullscreenElement){
+      // exit fullscreen
+      if(document.exitFullscreen) document.exitFullscreen().catch(()=>{});
+    } else {
+      if(el.requestFullscreen) el.requestFullscreen().catch(()=>{});
+      // pause inactivity timer immediately
+      clearTimeout(inactivityTimer);
+    }
+  });
+}
+
+// resume timer when leaving fullscreen
+document.addEventListener('fullscreenchange', ()=>{
+  if(!document.fullscreenElement){
+    resetInactivityTimer();
+  } else {
+    // already cleared on enter
+    clearTimeout(inactivityTimer);
+  }
+});
+
+// update UI when fullscreen toggles (change button icon / class)
+function updateFullscreenUI(){
+  const el = document.querySelector('.camera1');
+  const btn = document.getElementById('camFsBtn');
+  if(document.fullscreenElement){
+    if(el) el.classList.add('fs-active');
+    if(btn) btn.textContent = '✕';
+  } else {
+    if(el) el.classList.remove('fs-active');
+    if(btn) btn.textContent = '⤢';
+  }
+}
+document.addEventListener('fullscreenchange', updateFullscreenUI);
+
+/* =========================
+   ESP32-CAM LED + Stream control
+   - LED toggles are sent via an Image GET (no-CORS needed)
+   - stream is started by setting <img data-src> -> src after LED on
+   ========================= */
+const ESP = {
+  base: 'http://192.168.178.50',
+  streamPath: '/stream',
+  ledPath: '/led?state=',
+  isStreaming: false,
+  ledState: 'off'
+};
+
+function imgRequest(url, timeout = 3000){
+  return new Promise(resolve => {
+    const i = new Image();
+    let done = false;
+    const to = setTimeout(()=>{ if(done) return; done = true; resolve(false); }, timeout);
+    i.onload = ()=>{ if(done) return; done = true; clearTimeout(to); resolve(true); };
+    i.onerror = ()=>{ if(done) return; done = true; clearTimeout(to); resolve(false); };
+    i.src = url;
+  });
+}
+
+async function ledSet(state){
+  ESP.ledState = state;
+  const url = `${ESP.base}${ESP.ledPath}${state}&_=${Date.now()}`;
+  try{
+    await imgRequest(url, 3000);
+    return true;
+  }catch(e){
+    return false;
+  }
+}
+
+function startEspStream(){
+  if(ESP.isStreaming) return;
+  const img = document.getElementById('webcamVideo');
+  if(!img) return;
+  const data = img.getAttribute('data-src');
+  if(!data) return;
+  const u = new URL(data, window.location.href);
+  u.searchParams.set('_t', Date.now());
+  img.src = u.toString();
+  ESP.isStreaming = true;
+}
+
+function stopEspStream(){
+  const img = document.getElementById('webcamVideo');
+  if(!img) return;
+  img.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
+  ESP.isStreaming = false;
+}
+
+async function handleEnterView2(){
+  // If already streaming, nothing to do
+  if(ESP.isStreaming) return;
+  // Turn LED on (fire-and-wait via image GET)
+  const ok = await ledSet('on');
+  if(!ok){
+    showCamError('LED konnte nicht eingeschaltet werden. Stream wird nicht gestartet.');
+    return;
+  }
+  // give camera a short moment to prepare
+  await sleep(600);
+  startEspStream();
+}
+
+async function handleExitView2(){
+  // stop stream first
+  stopEspStream();
+  // small delay to ensure stream freed
+  await sleep(200);
+  // turn LED off (best-effort)
+  await ledSet('off');
+}
+
+// Ensure cleanup when tab hidden or page unloads
+document.addEventListener('visibilitychange', ()=>{ if(document.hidden) handleExitView2(); });
+window.addEventListener('beforeunload', ()=>{ handleExitView2(); });
+
+</script>
+
+</body>
+</html>
